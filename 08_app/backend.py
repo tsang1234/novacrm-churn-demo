@@ -13,6 +13,7 @@ import pandas as pd
 import streamlit as st
 from databricks import sql
 from databricks.sdk.core import Config
+from mlflow.deployments import get_deploy_client
 
 CATALOG = "novacrm_demo"
 
@@ -74,6 +75,90 @@ def get_stats() -> dict:
                  WHERE a.status = 'pending') AS mrr_at_risk
         """)
     return df.iloc[0].to_dict()
+
+
+# ── LLM Chat ─────────────────────────────────────────────────────────────────
+
+LLM_ENDPOINT = "databricks-meta-llama-3-3-70b-instruct"
+
+
+def get_churn_context() -> str:
+    """Build a text summary of churn data for the LLM system prompt."""
+    with cursor() as cur:
+        # Top 10 highest churn probability
+        top10 = _df(cur, f"""
+            SELECT
+                dc.company_name,
+                dc.sector_label AS industry,
+                dc.company_size,
+                h.mrr,
+                h.health_score,
+                h.risk_tier,
+                h.days_to_renewal,
+                p.churn_probability,
+                p.top_factors
+            FROM {PREDICTIONS_TABLE} p
+            JOIN {COMPANIES_TABLE} dc ON p.company_id = dc.company_id
+            JOIN {HEALTH_TABLE}    h  ON p.company_id = h.company_id
+            ORDER BY p.churn_probability DESC
+            LIMIT 10
+        """)
+
+        # Global stats
+        stats = _df(cur, f"""
+            SELECT
+                COUNT(*)                                                       AS total,
+                SUM(CASE WHEN p.risk_tier = 'High'   THEN 1 ELSE 0 END)       AS n_high,
+                SUM(CASE WHEN p.risk_tier = 'Medium'  THEN 1 ELSE 0 END)      AS n_medium,
+                SUM(CASE WHEN p.risk_tier = 'Low'    THEN 1 ELSE 0 END)       AS n_low,
+                ROUND(SUM(CASE WHEN p.risk_tier = 'High' THEN h.mrr ELSE 0 END), 0) AS mrr_high_risk
+            FROM {PREDICTIONS_TABLE} p
+            JOIN {HEALTH_TABLE} h ON p.company_id = h.company_id
+        """)
+
+        # Pending actions summary
+        actions = _df(cur, f"""
+            SELECT action_type, status, COUNT(*) AS n
+            FROM {ACTIONS_TABLE}
+            GROUP BY action_type, status
+            ORDER BY action_type, status
+        """)
+
+    # Format top 10
+    lines = []
+    for _, r in top10.iterrows():
+        lines.append(
+            f"- {r['company_name']} | {r['industry']} | {r['company_size']} | "
+            f"MRR {int(r['mrr'])}€ | Health {r['health_score']}/100 | "
+            f"Churn {float(r['churn_probability']):.1%} | {r['risk_tier']} | "
+            f"Renouvellement J-{r['days_to_renewal']} | Factors: {r['top_factors']}"
+        )
+
+    s = stats.iloc[0]
+    ctx = (
+        f"=== Statistiques globales ===\n"
+        f"Total entreprises : {int(s['total'])}\n"
+        f"High risk : {int(s['n_high'])} | Medium : {int(s['n_medium'])} | Low : {int(s['n_low'])}\n"
+        f"MRR total High risk : {int(s['mrr_high_risk'])}€\n\n"
+        f"=== Top 10 entreprises par probabilité de churn ===\n"
+        + "\n".join(lines)
+    )
+
+    if not actions.empty:
+        action_lines = [f"- {r['action_type']} / {r['status']} : {int(r['n'])}" for _, r in actions.iterrows()]
+        ctx += "\n\n=== Actions de rétention ===\n" + "\n".join(action_lines)
+
+    return ctx
+
+
+def chat_with_llm(messages: list[dict]) -> str:
+    """Call the LLM via Databricks Model Serving."""
+    deploy_client = get_deploy_client("databricks")
+    response = deploy_client.predict(
+        endpoint=LLM_ENDPOINT,
+        inputs={"messages": messages, "max_tokens": 4096},
+    )
+    return response["choices"][0]["message"]["content"]
 
 
 def get_risk_distribution() -> pd.DataFrame:

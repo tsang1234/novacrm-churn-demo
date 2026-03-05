@@ -54,7 +54,7 @@ with st.sidebar:
     st.divider()
     page = st.radio(
         "Navigation",
-        ["🏠 Dashboard", "✅ Review Actions", "📊 Predictions"],
+        ["🏠 Dashboard", "✅ Review Actions", "📊 Predictions", "💬 AI Chat"],
         label_visibility="collapsed",
     )
     st.divider()
@@ -386,3 +386,68 @@ elif page == "📊 Predictions":
         file_name="novacrm_predictions.csv",
         mime="text/csv",
     )
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PAGE 4 — AI CHAT
+# ══════════════════════════════════════════════════════════════════════════════
+elif page == "💬 AI Chat":
+    st.title("💬 AI Chat — Assistant Churn")
+
+    # Init session state
+    if "chat_messages" not in st.session_state:
+        st.session_state["chat_messages"] = []
+
+    # Build system prompt with cached churn context
+    @st.cache_data(ttl=300)
+    def _load_churn_context():
+        return bk.get_churn_context()
+
+    try:
+        churn_context = _load_churn_context()
+    except Exception as e:
+        st.error(f"Impossible de charger le contexte churn : {e}")
+        st.stop()
+
+    SYSTEM_PROMPT = (
+        "Tu es un assistant expert en analyse de churn pour NovaCRM Solutions (CRM SaaS B2B).\n"
+        "Tu aides les Customer Success Managers à comprendre les risques de churn "
+        "et à prioriser les actions de rétention.\n"
+        "Réponds en français, de manière claire et structurée.\n\n"
+        "Voici les données actuelles du portefeuille :\n"
+        f"{churn_context}\n\n"
+        "Base tes réponses uniquement sur ces données. Si une information n'est pas disponible, dis-le."
+    )
+
+    # Display chat history
+    for msg in st.session_state["chat_messages"]:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
+
+    # Chat input
+    if prompt := st.chat_input("Posez votre question sur le churn..."):
+        # Show user message
+        st.session_state["chat_messages"].append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.markdown(prompt)
+
+        # Build messages for LLM
+        llm_messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+        llm_messages.extend(st.session_state["chat_messages"])
+
+        # Call LLM
+        with st.chat_message("assistant"):
+            with st.spinner("Réflexion en cours..."):
+                try:
+                    answer = bk.chat_with_llm(llm_messages)
+                except Exception as e:
+                    answer = f"Erreur lors de l'appel au LLM : {e}"
+            st.markdown(answer)
+
+        st.session_state["chat_messages"].append({"role": "assistant", "content": answer})
+
+    # Reset button
+    if st.session_state["chat_messages"]:
+        if st.button("🗑️ Nouvelle conversation"):
+            st.session_state["chat_messages"] = []
+            st.rerun()
