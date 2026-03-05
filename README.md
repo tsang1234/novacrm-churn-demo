@@ -404,10 +404,10 @@ La table `gold.feature_store_churn` est la source unique pour le modèle ML :
 
 ### Étape 7 — Databricks App
 
-- [ ] Tableau de bord Streamlit pour les agents CS
-- [ ] Vue portefeuille avec filtres par risk_tier
-- [ ] Interface de validation des actions (approve / modify / reject)
-- [ ] Métriques de performance des agents AI (taux de sauvegarde, ROI)
+- [x] Tableau de bord Streamlit pour les agents CS
+- [x] Vue portefeuille avec filtres par risk_tier
+- [x] Interface de validation des actions (approve / modify / reject)
+- [x] Métriques de performance des agents AI (taux de sauvegarde, ROI)
 
 ---
 
