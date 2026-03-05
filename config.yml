@@ -1,0 +1,38 @@
+# ============================================================
+# NovaCRM Demo Pipeline — Configuration
+# ============================================================
+# Modifiez ce fichier pour adapter le pipeline à votre tenant Databricks.
+# Toutes les valeurs ici sont injectées dans les scripts SQL via {catalog}.
+
+# Nom du catalog Unity Catalog cible
+catalog: novacrm_demo
+
+# ID du SQL Warehouse (laisser 'auto' pour sélection automatique)
+# Pour trouver l'ID : Databricks UI > SQL Warehouses > cliquer sur le warehouse > onglet Connection details
+warehouse_id: auto
+
+# Profil Databricks CLI à utiliser (laisser 'DEFAULT' si non configuré)
+# Voir: ~/.databrickscfg
+databricks_profile: DEFAULT
+
+# Timeout par requête SQL en secondes (augmenter pour les gros volumes)
+sql_timeout: 600
+
+# Endpoint LLM via Databricks Foundation Model APIs (pas de secret requis)
+# Options disponibles :
+#   databricks-meta-llama-3-3-70b-instruct  (recommandé)
+#   databricks-dbrx-instruct
+#   databricks-meta-llama-3-1-405b-instruct
+llm_endpoint: databricks-meta-llama-3-3-70b-instruct
+
+# Chemin workspace pour le déploiement des jobs
+workspace_base: /Shared/novacrm
+
+# Stages à exécuter (retirer un stage pour un re-run partiel)
+# Ordre d'exécution garanti par la numérotation des dossiers
+stages:
+  - 00_setup
+  - 01_bronze
+  - 02_silver
+  - 03_gold
+  - 04_quality

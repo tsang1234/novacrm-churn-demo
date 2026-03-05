@@ -1,0 +1,23 @@
+# Claude Code
+.claude/
+.ai-dev-kit/
+
+# Databricks
+.databricks-resources.json
+.mcp.json
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
